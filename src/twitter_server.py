@@ -29,7 +29,7 @@ def print_top_trends(region: str):
 
 
 def live_stream():
-    stream_listener = TwitterListener()
+    stream_listener = TwitterListener(num_tweets_to_grab=5)
     stream = tweepy.Stream(api.auth, stream_listener)
     try:
         stream.sample()
@@ -43,7 +43,7 @@ if __name__ == "__main__":
     api = tweepy.API(auth, wait_on_rate_limit=True,
                      wait_on_rate_limit_notify=True)
 
-    print_tweets_with_query("travel")
-    print_top_trends("Worldwide")
+    # print_tweets_with_query("travel")
+    # print_top_trends("Worldwide")
 
     live_stream()
