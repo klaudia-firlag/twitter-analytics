@@ -1,6 +1,7 @@
 import tweepy
 
 import src.config.data as data
+from bin.modules import TwitterListener
 from src.config.local_config import *
 from src.config.style import color
 
@@ -27,6 +28,15 @@ def print_top_trends(region: str):
         print(f"#{i + 1}\t{trends[i]['name']}")
 
 
+def live_stream():
+    stream_listener = TwitterListener()
+    stream = tweepy.Stream(api.auth, stream_listener)
+    try:
+        stream.sample()
+    except Exception as e:
+        print(e, e.__doc__)
+
+
 if __name__ == "__main__":
     auth = tweepy.OAuthHandler(cons_key, cons_sec)
     auth.set_access_token(app_key, app_sec)
@@ -35,3 +45,5 @@ if __name__ == "__main__":
 
     print_tweets_with_query("travel")
     print_top_trends("Worldwide")
+
+    live_stream()
