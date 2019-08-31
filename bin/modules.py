@@ -1,5 +1,4 @@
 import json
-from collections import Counter
 
 import tweepy
 from tweepy import StreamListener
@@ -7,7 +6,29 @@ from tweepy import StreamListener
 from src.config import data
 from src.config.data import langs
 from src.config.local_config import *
-from src.config.style import color
+from src.config.style import FONT
+
+
+class TwitterStats:
+
+    def __init__(self):
+        self.languages = []
+        self.top_languages = []
+        self.top_tweets = []
+
+    def add_language(self, language):
+        if language not in self.languages:
+            self.languages.append(language)
+
+    def add_top_language(self, language):
+        if language not in self.top_languages:
+            self.top_languages.append(language)
+
+    def add_top_tweet(self, tweet):
+        self.top_tweets.append(tweet)
+
+    def get_stats(self):
+        return self.languages, self.top_languages, self.top_tweets
 
 
 class TwitterMain:
@@ -20,6 +41,7 @@ class TwitterMain:
 
         self.num_tweets_to_analyze = num_tweets_to_analyze
         self.retweet_count = retweet_count
+        self.stats = TwitterStats()
 
     def get_top_trends(self, region: str):
         try:
@@ -29,58 +51,46 @@ class TwitterMain:
             return
 
         trends = self.api.trends_place(region_id)
-        # print(f"\n{color.BLUE}Top trends in region "
-        #       f"{color.ITALIC}{region}:{color.END}\n")
         trends = trends[0]['trends']
-        # for i in range(len(trends)):
-        #     print(f"#{i + 1}\t{trends[i]['name']}")
 
     def get_tweets_with_query(self, query: str):
         search_results = self.api.search(q=query)
-        # print(f"\n{color.BLUE}Tweets that include keyword "
-        #       f"{color.ITALIC}{query}{color.END}:\n")
-        # for i in range(len(search_results)):
-        #     print(f"{getattr(search_results[i], 'text')}\n"
-        #           + "_" * 100)
 
-    def get_streaming_data(self):
+    def _get_streaming_data(self):
         stream_listener = TwitterListener(num_tweets_to_grab=self.num_tweets_to_analyze,
-                                          retweet_count=self.retweet_count)
+                                          stats=self.stats, retweet_count=self.retweet_count)
         stream = tweepy.Stream(self.api.auth, stream_listener)
         try:
             stream.sample()
-            # return stream_listener.get_top_tweets()
         except Exception as e:
             print(e, e.__doc__)
+
+        return self.stats.get_stats()
+
+    def print_streaming_data(self):
+        languages, top_languages, top_tweets = self._get_streaming_data()
+        print(f"\n{FONT.BOLD}Languages of the analyzed tweets:"
+              f"{FONT.END}\n{languages}")
+        print(f"\n{FONT.BOLD}Tweets with more than {self.retweet_count} "
+              f"retweets: {FONT.END}")
+        print(f"\t* languages:\t\t{languages}")
+        print(f"\t* tweets:\t\t\t{[tweet.text for tweet in top_tweets]}")
+        print(f"\t* tweets' htmls:\t{[tweet.html for tweet in top_tweets]}")
 
 
 class TwitterListener(StreamListener):
 
-    def __init__(self, num_tweets_to_grab, retweet_count):
+    def __init__(self, num_tweets_to_grab, stats, retweet_count):
         super().__init__()
-        self.start_listener = True
         self.counter = 0
         self.num_tweets_to_grab = num_tweets_to_grab
         self.retweet_count = retweet_count
-        self.languages = []
-        self.top_languages = []
-        self.top_tweets = []
+        self.stats = stats
 
     def on_data(self, raw_data):
         if self.counter >= self.num_tweets_to_grab:
-            # print(f"\n{color.BLUE}Languages of the processed tweets:{color.END}")
-            # print(self.languages)
-            # print(Counter(self.languages))
-            # print(f"\n{color.BLUE}Languages of the processed tweets that "
-            #       f"have more than {self.retweet_count} number of retweets:{color.END}")
-            # print(self.top_languages)
-            # print(Counter(self.top_languages))
             return False
 
-        # if self.start_listener:
-        #     print(f"\n{color.BLUE}Tweets that were retweeted "
-        #           f"at least {self.retweet_count} times:{color.END}")
-        #     self.start_listener = False
         json_data = json.loads(raw_data)
         if 'text' in json_data:
             if json_data['lang'] in langs:
@@ -91,14 +101,11 @@ class TwitterListener(StreamListener):
             if retweet_data:
                 retweet_count = retweet_data['retweet_count']
                 if retweet_count >= self.retweet_count:
-                    # print(f"\nLanguage: {language}, "
-                    #       f"Retweeted {retweet_count} times. Tweet:\n"
-                    #       f"{json_data['text']}")
-                    tweet = Tweet(language, retweet_count, json_data['text'])
-                    self.top_tweets.append(tweet)
-                    self.top_languages.append(language)
+                    tweet = Tweet(self.api, language, retweet_count, json_data['text'], json_data['id'])
+                    self.stats.add_top_tweet(tweet)
+                    self.stats.add_top_language(language)
 
-            self.languages.append(language)
+            self.stats.add_language(language)
             self.counter += 1
         return True
 
@@ -111,7 +118,15 @@ class TwitterListener(StreamListener):
 
 class Tweet:
 
-    def __init__(self, language, retweet_count, text):
+    def __init__(self, api, language, retweet_count, text, id):
         self.language = language
         self.retweet_count = retweet_count
         self.text = text
+        self.html = self._get_html(api, id)
+
+    def _get_html(self, api, id):
+        oembed = api.get_oembed(id=id, hide_media=True, hide_thread=True)
+        html_info = oembed['html'].strip('\n')
+        idx = [html_info.find('a href=\"', 1) + 8]
+        idx.append(idx[0] + html_info[idx[0]:].find('\"'))
+        return html_info[idx[0]:idx[1]]
