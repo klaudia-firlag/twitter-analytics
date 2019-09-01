@@ -99,7 +99,7 @@ class TwitterMain:
               f"{FONT.END}\n{str(languages)[1:-1]}")
         print(f"\n{FONT.BOLD}Tweets with more than {self.retweet_count} "
               f"retweets: {FONT.END}")
-        print(f"\t* languages:\t\t{str(languages)[1:-1]}")
+        print(f"\t* languages:\t\t{str(top_languages)[1:-1]}")
         print(f"\t* tweets:\t\t\t{str([tweet.text for tweet in top_tweets])[1:-1]}")
         print(f"\t* tweets' htmls:\t{str([tweet.html for tweet in top_tweets])[1:-1]}")
 
@@ -150,7 +150,8 @@ class Tweet:
         self.text = text
         self.html = self._get_html(api, id)
 
-    def _get_html(self, api, id):
+    @staticmethod
+    def _get_html(api, id):
         oembed = api.get_oembed(id=id, hide_media=True, hide_thread=True)
         html_info = oembed['html'].strip('\n')
         idx = [html_info.find('a href=\"', 1) + 8]
