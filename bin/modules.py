@@ -1,4 +1,5 @@
 import json
+import re
 
 import tweepy
 from tweepy import StreamListener
@@ -43,18 +44,43 @@ class TwitterMain:
         self.retweet_count = retweet_count
         self.stats = TwitterStats()
 
-    def get_top_trends(self, region: str):
+        self.trends = {}
+        self.search_results = None
+
+    def add_top_trends(self, region: str):
         try:
             region_id = data.woeid[region]
         except KeyError:
-            print(f"Invalid region. Aviable regions:\n{list(data.woeid.keys())}")
+            print(f"Invalid region. Available regions:\n{list(data.woeid.keys())}")
             return
 
         trends = self.api.trends_place(region_id)
-        trends = trends[0]['trends']
+        self.trends[region] = trends[0]['trends']
 
-    def get_tweets_with_query(self, query: str):
-        search_results = self.api.search(q=query)
+    def print_top_trends(self):
+        print(f"\n{FONT.BOLD}Top trends:{FONT.END}")
+        for region_key in self.trends:
+            print(f"\t* {region_key}: {str([trend['name'] for trend in self.trends[region_key]])[1:-1]}")
+
+    def _get_tweets_with_query(self, query: str):
+        self.search_results = self.api.search(q=query)
+
+    @staticmethod
+    def _print_with_indent(text: str):
+        newline_idxs = [0] + [m.start() for m in re.finditer('\n', text)] + [-1]
+        for i in range(len(newline_idxs) - 1):
+            line = text[newline_idxs[i]:newline_idxs[i + 1]]
+            if i == 0:
+                print('\t* ' + str(line[1:] if line[:1] == '\n' else line))
+            else:
+                print('\t  ' + str(line[1:] if line[:1] == '\n' else line))
+
+    def print_tweets_with_query(self, query: str):
+        self._get_tweets_with_query(query)
+        print(f"\n{FONT.BOLD}Tweets that include keyword "
+              f"{FONT.ITALIC}{query}{FONT.END}:")
+        for tweet in self.search_results:
+            self._print_with_indent(tweet.text)
 
     def _get_streaming_data(self):
         stream_listener = TwitterListener(num_tweets_to_grab=self.num_tweets_to_analyze,
@@ -70,12 +96,12 @@ class TwitterMain:
     def print_streaming_data(self):
         languages, top_languages, top_tweets = self._get_streaming_data()
         print(f"\n{FONT.BOLD}Languages of the analyzed tweets:"
-              f"{FONT.END}\n{languages}")
+              f"{FONT.END}\n{str(languages)[1:-1]}")
         print(f"\n{FONT.BOLD}Tweets with more than {self.retweet_count} "
               f"retweets: {FONT.END}")
-        print(f"\t* languages:\t\t{languages}")
-        print(f"\t* tweets:\t\t\t{[tweet.text for tweet in top_tweets]}")
-        print(f"\t* tweets' htmls:\t{[tweet.html for tweet in top_tweets]}")
+        print(f"\t* languages:\t\t{str(languages)[1:-1]}")
+        print(f"\t* tweets:\t\t\t{str([tweet.text for tweet in top_tweets])[1:-1]}")
+        print(f"\t* tweets' htmls:\t{str([tweet.html for tweet in top_tweets])[1:-1]}")
 
 
 class TwitterListener(StreamListener):
